@@ -57,22 +57,30 @@ class Node:
 		self._neighbor_queries[s] = ret
 		return ret
 	
-	def plot(self,plot):
+	def plot(self,ax):
+		from numpy import array
+		from matplotlib.patches import Polygon
+		from matplotlib import colors
+		hsv = ((hash(hash(self.channel)) % 10)/10.0, 0.8, 0.8)
+		color = colors.hsv_to_rgb(hsv)
+
 		x = self.x()
 		y = self.y()
-		plot.text(x, y, self.channel, horizontalalignment='center', verticalalignment='center')
+		ax.text(x, y, self.channel, horizontalalignment='center', verticalalignment='center')
+
 
 		left = x - sqrt(0.75)
 		right = x + sqrt(0.75)
 
-		xs = [left,    x,     right,   right,   x,     left,    left]
-		ys = [y - 0.5, y - 1, y - 0.5, y + 0.5, y + 1, y + 0.5, y - 0.5]
-		plot.plot(xs,ys,'-')
+		points = [(left, y - 0.5), (x, y - 1), (right, y - 0.5), (right, y + 0.5), (x, y + 1), (left, y + 0.5)]
+		p = Polygon(array(points), color=color)
+		ax.add_patch(p)
 
 class HexGraph:
 
 	def __init__(self,size):
 		self.center = Node()
+		self.size = size
 		border = [self.center]
 
 		for ring in xrange(1,size):
@@ -218,9 +226,14 @@ class HexGraph:
 				stack.append(node.right)
 
 
-	def plot(self, plot, midX=0, midY=0):
+	def plot(self, plot):
+		fig = plot.figure()
+		ax = fig.add_subplot(111)
+		ax.set_xlim(-(2*self.size+1)*sqrt(0.75),(2*self.size+1)*sqrt(0.75))
+		ax.set_ylim(-(self.size+1)*1.5, (self.size+1)*1.5)
+
 		for node in self.nodes():
-			node.plot(plot)
+			node.plot(ax)
 
 	def nodes(self):
 		node = self.center
