@@ -6,6 +6,7 @@ from math import sqrt
 class Node:
 
 	def __init__(self):
+		self.pos = None
 		self.left = None
 		self.right = None
 		self.topLeft = None
@@ -15,6 +16,9 @@ class Node:
 		self.channel = None
 		self._neighbor_queries = dict()
 
+	def distance(self,node):
+		return sqrt((self.pos[0] - node.pos[0])**2 + (self.pos[1] - node.pos[1])**2)
+
 	def neighbors(self,s):
 		if s in self._neighbor_queries:
 			return self._neighbor_queries[s]
@@ -23,33 +27,45 @@ class Node:
 		node = self
 		queue = deque()
 		neighbors = set()
-		def addChildren(dist,parent):
-			queue.extend((dist,node) for node in [
+		def addChildren(parent):
+			queue.extend(node for node in [
 					parent.right,
 					parent.topRight,
 					parent.topLeft,
 					parent.left,
 					parent.botLeft,
 					parent.botRight
-				] if node != None and node not in neighbors and node != self
+				] if node != None and node not in neighbors and node != self and self.distance(node) <= s
 			)
-		addChildren(1,self)
+		addChildren(self)
 		while(len(queue) > 0):
-			dist, parent = queue.popleft()
+			parent = queue.popleft()
 			if parent in neighbors or parent == self:
 				continue
 			neighbors.add(parent)
-			if(dist < s):
-				addChildren(dist+1,parent)
+			addChildren(parent)
 		ret = frozenset(neighbors)
 		self._neighbor_queries[s] = ret
 		return ret
+	
+	def plot(self,plot):
+		x, y = self.pos
+		plot.text(x, y, self.channel, horizontalalignment='center', verticalalignment='center')
+
+		left = x - sqrt(0.75)
+		right = x + sqrt(0.75)
+
+		xs = [left,    x,     right,   right,   x,     left,    left]
+		ys = [y - 0.5, y - 1, y - 0.5, y + 0.5, y + 1, y + 0.5, y - 0.5]
+		plot.plot(xs,ys,'-')
 
 class HexGraph:
 
 	def __init__(self,size):
 		self.center = Node()
+		self.center.pos = (0,0)
 		border = [self.center]
+
 		for ring in xrange(1,size):
 			nextBorder = [Node() for i in xrange(ring*6)]
 
@@ -162,36 +178,38 @@ class HexGraph:
 				border[(i-5)%(6*(ring-1))].botRight = nextBorder[i]
 
 			border = nextBorder
+		self.assignPositions()
 
-	def plot(self, plot, midX=0, midY=0):
+	def assignPositions(self):
 		node = self.center
-		coord = (midX,midY)
+		coord = (0,0) # relative indices for hexagon positions
 		while(node.left != None):
 			node = node.topLeft
-			coord = (coord[0]-1,coord[1]+0.5+sqrt(1.25))
+			coord = (coord[0]-1,coord[1]+1)
 
 		# the loop traverses the graph by going left to right on each row starting at the top row
 		stack = [(coord,node)]
 		while(len(stack) > 0):
 			coord, node = stack.pop()
 			x,y = coord
-			plot.text(x,y,str(node.channel),horizontalalignment='center',verticalalignment='center')
 
-			# plot hexagon
-			xs = [x-1,x,x+1,x+1,x,x-1,x-1]
-			ys = [y-0.5,y-sqrt(1.25),y-0.5,y+0.5,y+sqrt(1.25),y+0.5,y-0.5]
-			plot.plot(xs,ys,'-')
+			node.pos = (coord[0] * sqrt(0.75), coord[1] * 1.5) # convert relative indexed position to absolute position
 
 			# add next row
 			if(node.left == None):
 				if(node.botLeft != None):
-					stack.append(((x-1,y-0.5-sqrt(1.25)),node.botLeft))
+					stack.append(((x - 1, y - 1),node.botLeft))
 				elif(node.botRight != None):
-					stack.append(((x+1,y-0.5-sqrt(1.25)),node.botRight))
+					stack.append(((x + 1, y - 1),node.botRight))
 
 			# add nodes to the right
 			if(node.right != None):
 				stack.append(((x+2,y),node.right))
+
+
+	def plot(self, plot, midX=0, midY=0):
+		for node in self.nodes():
+			node.plot(plot)
 
 	def nodes(self):
 		node = self.center
@@ -219,8 +237,8 @@ class HexGraph:
 		nodes = tuple(self.nodes())
 		while(True): # this loop lowers the upper bounds each iteration to find the optimal solution
 			p = Problem()
-			p.addVariables([n for n in self.nodes()], range(upperBound-1,-1,-1)) # reverse ordering the domain biases the constraint solver towards smaller numbers
-			p.addConstraint(SomeInSetConstraint([0]))
+			p.addVariables([n for n in self.nodes()], range(upperBound,0,-1)) # reverse ordering the domain biases the constraint solver towards smaller numbers
+			p.addConstraint(SomeInSetConstraint([1]))
 			def addConstraint(node1, node2, dist, diff):
 				if(node1 in node2.neighbors(dist)):
 					p.addConstraint(lambda x, y: abs(x - y) >= diff,(node1, node2))
