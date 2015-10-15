@@ -6,7 +6,7 @@ from math import sqrt
 class Node:
 
 	def __init__(self):
-		self.pos = None
+		self._pos = None
 		self.left = None
 		self.right = None
 		self.topLeft = None
@@ -17,7 +17,16 @@ class Node:
 		self._neighbor_queries = dict()
 
 	def distance(self,node):
-		return sqrt((self.pos[0] - node.pos[0])**2 + (self.pos[1] - node.pos[1])**2)
+		return sqrt(
+			(sqrt(0.75)*(self._pos[0] - node._pos[0]))**2 + 
+			(1.5*(self._pos[1] - node._pos[1]))**2
+		)
+
+	def x(self):
+		return self._pos[0]*sqrt(0.75)
+
+	def y(self):
+		return self._pos[1]*1.5
 
 	def neighbors(self,s):
 		if s in self._neighbor_queries:
@@ -49,7 +58,8 @@ class Node:
 		return ret
 	
 	def plot(self,plot):
-		x, y = self.pos
+		x = self.x()
+		y = self.y()
 		plot.text(x, y, self.channel, horizontalalignment='center', verticalalignment='center')
 
 		left = x - sqrt(0.75)
@@ -63,7 +73,6 @@ class HexGraph:
 
 	def __init__(self,size):
 		self.center = Node()
-		self.center.pos = (0,0)
 		border = [self.center]
 
 		for ring in xrange(1,size):
@@ -188,23 +197,25 @@ class HexGraph:
 			coord = (coord[0]-1,coord[1]+1)
 
 		# the loop traverses the graph by going left to right on each row starting at the top row
-		stack = [(coord,node)]
+		node._pos = coord
+		stack = [node]
 		while(len(stack) > 0):
-			coord, node = stack.pop()
-			x,y = coord
-
-			node.pos = (coord[0] * sqrt(0.75), coord[1] * 1.5) # convert relative indexed position to absolute position
+			node = stack.pop()
+			x,y = node._pos
 
 			# add next row
 			if(node.left == None):
 				if(node.botLeft != None):
-					stack.append(((x - 1, y - 1),node.botLeft))
+					node.botLeft._pos = (x - 1, y - 1)
+					stack.append(node.botLeft)
 				elif(node.botRight != None):
-					stack.append(((x + 1, y - 1),node.botRight))
+					node.botRight._pos = (x + 1, y - 1)
+					stack.append(node.botRight)
 
 			# add nodes to the right
 			if(node.right != None):
-				stack.append(((x+2,y),node.right))
+				node.right._pos = (x + 2, y)
+				stack.append(node.right)
 
 
 	def plot(self, plot, midX=0, midY=0):
