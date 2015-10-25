@@ -235,6 +235,44 @@ class HexGraph:
 		for node in self.nodes():
 			node.plot(ax)
 
+	def rows(self):
+		def row(node):
+			while(True):
+				yield node
+				if(node.right == None):
+					return
+				node = node.right
+
+		node = self.center
+		while(node.left != None):
+			node = node.topLeft
+
+		while(True):
+			yield row(node)
+			if(node.botLeft != None):
+				node = node.botLeft
+			elif(node.botRight != None):
+				node = node.botRight
+			else:
+				return
+	
+	def columns(self):
+		def column(node):
+			while(True):
+				yield node
+				if(node.botLeft == None):
+					return
+				node = node.botLeft
+		node = self.center
+		while(node.left != None):
+			node = node.topLeft
+		while(True):
+			yield column(node)
+			if(node.right != None):
+				node = node.right
+			else:
+				return
+
 	def nodes(self):
 		node = self.center
 		while(node.left != None):
@@ -249,41 +287,44 @@ class HexGraph:
 					stack.append(node.botLeft)
 				elif(node.botRight != None):
 					stack.append(node.botRight)
-
 			if(node.right != None):
 				stack.append(node.right)
 			yield node
 
-	def computeChannels(self, upperBound, optimize=False):
+	def computeChannels(self, n, k=2):
 		from constraint import Problem
 		from constraint import SomeInSetConstraint
 		found = False
 		nodes = tuple(self.nodes())
-		while(True): # this loop lowers the upper bounds each iteration to find the optimal solution
-			p = Problem()
-			p.addVariables([n for n in self.nodes()], range(upperBound,0,-1)) # reverse ordering the domain biases the constraint solver towards smaller numbers
-			p.addConstraint(SomeInSetConstraint([1]))
-			def addConstraint(node1, node2, dist, diff):
-				if(node1 in node2.neighbors(dist)):
-					p.addConstraint(lambda x, y: abs(x - y) >= diff,(node1, node2))
-					return True
-				return False
+		p = Problem()
+		p.addVariables(list(self.nodes()), range(n,0,-1)) # reverse ordering the domain biases the constraint solver towards smaller numbers
+		p.addConstraint(SomeInSetConstraint([1]))
+		def addConstraint(node1, node2, dist, diff):
+			if(node1 in node2.neighbors(dist)):
+				p.addConstraint(lambda x, y: abs(x - y) >= diff,(node1, node2))
+				return True
+			return False
 
-			for i in xrange(len(nodes)-1):
-				n1 = nodes[i]
-				for j in xrange(i+1,len(nodes)):
-					n2 = nodes[j]
-					if(not addConstraint(n1, n2, 2, 2)): # each node pair needs no more than 1 constraint
-						addConstraint(n1, n2, 4, 1)
-			solution = p.getSolution()
-			if(solution == None):
-				return found
-			found = True
-			for node,channel in p.getSolution().iteritems():
-				node.channel = channel
-			if(not optimize):
-				break
-			upperBound = min(upperBound-1,max(solution.values()))
+		for i in xrange(len(nodes)-1):
+			n1 = nodes[i]
+			for j in xrange(i+1,len(nodes)):
+				n2 = nodes[j]
+				if(not addConstraint(n1, n2, 2, k)): # each node pair needs no more than 1 constraint
+					addConstraint(n1, n2, 4, 1)
+		for rowIter in self.rows():
+			row = tuple(rowIter)
+			for i in xrange(len(row)-1):
+				p.addConstraint(lambda x, y: y == (x + k) % n + 1,(row[i], row[i+1]))
+		for colIter in self.columns():
+			col = tuple(colIter)
+			for i in xrange(len(col)-1):
+				p.addConstraint(lambda x, y: y == (x + k - 1) % n + 1,(col[i], col[i+1]))
+		solution = p.getSolution()
+		if(solution == None):
+			return found
+		found = True
+		for node,channel in p.getSolution().iteritems():
+			node.channel = channel
 		return True
 
 def main():
@@ -291,8 +332,9 @@ def main():
 	from matplotlib import pyplot
 	size = int(argv[1])
 	lub = int(argv[2])
+	k = int(argv[3])
 	g = HexGraph(size)
-	g.computeChannels(lub)
+	g.computeChannels(lub,k)
 	g.plot(pyplot)
 	pyplot.show()
 
